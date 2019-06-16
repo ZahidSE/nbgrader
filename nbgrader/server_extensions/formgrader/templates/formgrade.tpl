@@ -105,6 +105,12 @@
     {{ nbgrader_heading(cell) }}
     <div class="panel-body">
       <div class="text_cell_render border-box-sizing rendered_html">
+        <blockquote>
+          <p class="lead">Answer</p>
+          <p> {{ resources.answers.get(cell.metadata.nbgrader.grade_id) | markdown2html | strip_files_prefix }} </p>
+        </blockquote>
+      </div>
+      <div class="text_cell_render border-box-sizing rendered_html">
         {{ cell.source  | markdown2html | strip_files_prefix }}
       </div>
     </div>

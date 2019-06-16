@@ -3,9 +3,10 @@ import re
 import sys
 
 from tornado import web
-
+from nbformat import current_nbformat, read as read_nb
 from .base import BaseHandler, check_xsrf
 from ...api import MissingEntry
+from ...utils import is_grade
 
 
 class ManageAssignmentsHandler(BaseHandler):
@@ -94,6 +95,13 @@ class SubmissionHandler(BaseHandler):
         indices = self.api.get_notebook_submission_indices(assignment_id, notebook_id)
         ix = indices.get(submission.id, -2)
 
+        source_filename = os.path.join(self.coursedir.root, self.coursedir.source_directory, assignment_id, '{}.ipynb'.format(notebook_id))
+        nb = read_nb(source_filename, as_version=current_nbformat)
+        answers = {}
+        for cell in nb.cells:
+            if is_grade(cell) and cell.cell_type == 'markdown':
+                answers[cell.metadata['nbgrader'].get('grade_id')] = cell.source
+
         resources = {
             'assignment_id': assignment_id,
             'notebook_id': notebook_id,
@@ -105,8 +113,33 @@ class SubmissionHandler(BaseHandler):
             'student': student_id,
             'last_name': submission.student.last_name,
             'first_name': submission.student.first_name,
-            'notebook_path': self.url_prefix + '/' + relative_path
+            'notebook_path': self.url_prefix + '/' + relative_path,
+            'answers': answers
         }
+
+        # print(self.api.get_assignment(assignment_id)['source_path'])
+
+        # print(filename)
+        # nb = read_nb(filename, as_version=current_nbformat)
+        # print(nb)
+
+        # source_filename =  filename = os.path.join(os.path.abspath(self.coursedir.format_path(
+        #     self.coursedir.source_directory, student_id, assignment_id)), '{}.ipynb'.format(notebook_id))
+        # print(source_filename)
+        # print(self.coursedir.root)
+
+        # source_filename = os.path.join(self.coursedir.root, self.coursedir.source_directory, assignment_id, '{}.ipynb'.format(notebook_id))
+        # # print(source_filename)
+        #
+        # nb = read_nb(source_filename, as_version=current_nbformat)
+        # answers = {}
+        # for cell in nb.cells:
+        #     if is_grade(cell) and cell.cell_type == 'markdown':
+        #         answers[cell.metadata['nbgrader'].get('grade_id')] = cell.source
+        #         print(cell.cell_type)
+        #         print(cell.metadata['nbgrader'].get('grade_id'))
+        #         print(cell.source)
+        # print(answers)
 
         if not os.path.exists(filename):
             resources['filename'] = filename
