@@ -101,20 +101,21 @@
   {{ self.empty_in_prompt() }}
 
   {%- if 'nbgrader' in cell.metadata and (cell.metadata.nbgrader.solution or cell.metadata.nbgrader.grade or cell.metadata.nbgrader.task ) -%}
-  <div class="panel panel-primary nbgrader_cell">
-    {{ nbgrader_heading(cell) }}
-    <div class="panel-body">
-      <div class="text_cell_render border-box-sizing rendered_html">
-        <blockquote>
-          <p class="lead">Answer</p>
-          <p> {{ resources.answers.get(cell.metadata.nbgrader.grade_id) | markdown2html | strip_files_prefix }} </p>
-        </blockquote>
-      </div>
-      <div class="text_cell_render border-box-sizing rendered_html">
-        {{ cell.source  | markdown2html | strip_files_prefix }}
+  <div class="nbgrader_cell">
+    <div class="panel panel-info nbgrader_cell">
+      <div class="panel-heading nbgrader-label text_cell_render border-box-sizing rendered_html">
+        {{ resources.answers.get(cell.metadata.nbgrader.grade_id) | markdown2html | strip_files_prefix }}
       </div>
     </div>
-    {{ nbgrader_footer(cell) }}
+    <div class="panel panel-primary nbgrader_cell">
+      {{ nbgrader_heading(cell) }}
+      <div class="panel-body">
+        <div class="text_cell_render border-box-sizing rendered_html">
+          {{ cell.source  | markdown2html | strip_files_prefix }}
+        </div>
+      </div>
+      {{ nbgrader_footer(cell) }}
+    </div>
   </div>
 
   {%- else -%}
