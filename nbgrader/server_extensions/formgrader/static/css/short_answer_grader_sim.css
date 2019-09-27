@@ -1,0 +1,8 @@
+span.word {
+  margin-right: 5px;
+  display: inline-block;
+}
+
+.question-text {
+  font-weight: bold;
+}

@@ -20,6 +20,7 @@ var base_url = "{{ resources.base_url }}/formgrader";
 <script src="{{ resources.base_url }}/formgrader/static/js/formgrade_keyboardmanager.js"></script>
 <script src="{{ resources.base_url }}/formgrader/static/js/formgrade_models.js"></script>
 <script src="{{ resources.base_url }}/formgrader/static/js/formgrade.js"></script>
+<script src="{{ resources.base_url }}/formgrader/static/js/short_answer_grader_sim.js"></script>
 <script type="text/javascript">
 function toggle_name(on) {
   $(".name-shown").tooltip('hide');

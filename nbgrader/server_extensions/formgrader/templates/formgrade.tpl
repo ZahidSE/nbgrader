@@ -18,6 +18,7 @@
 {{ mathjax( resources.base_url + '/' + resources.mathjax_url + '?config=TeX-AMS-MML_HTMLorMML-full') }}
 
 <link rel="stylesheet" href="{{ resources.base_url }}/formgrader/static/css/formgrade.css" />
+<link rel="stylesheet" href="{{ resources.base_url }}/formgrader/static/css/short_answer_grader_sim.css" />
 
 </head>
 {%- endblock header -%}
@@ -103,7 +104,7 @@
   {%- if 'nbgrader' in cell.metadata and (cell.metadata.nbgrader.solution or cell.metadata.nbgrader.grade or cell.metadata.nbgrader.task ) -%}
   <div class="nbgrader_cell">
     <div class="panel panel-info nbgrader_cell">
-      <div class="panel-heading nbgrader-label text_cell_render border-box-sizing rendered_html">
+      <div class="panel-heading nbgrader-label text_cell_render border-box-sizing rendered_html" data-solution-id="{{cell.metadata.nbgrader.grade_id}}">
         {{ resources.answers.get(cell.metadata.nbgrader.grade_id) | markdown2html | strip_files_prefix }}
       </div>
     </div>
