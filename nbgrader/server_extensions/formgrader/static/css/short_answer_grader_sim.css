@@ -6,3 +6,7 @@ span.word {
 .question-text {
   font-weight: bold;
 }
+
+.question-demotion {
+  background-color: #6c757d;
+}

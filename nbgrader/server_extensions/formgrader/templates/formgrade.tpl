@@ -104,7 +104,7 @@
   {%- if 'nbgrader' in cell.metadata and (cell.metadata.nbgrader.solution or cell.metadata.nbgrader.grade or cell.metadata.nbgrader.task ) -%}
   <div class="nbgrader_cell">
     <div class="panel panel-info nbgrader_cell">
-      <div class="panel-heading nbgrader-label text_cell_render border-box-sizing rendered_html" data-solution-id="{{cell.metadata.nbgrader.grade_id}}">
+      <div class="panel-heading nbgrader-label text_cell_render border-box-sizing rendered_html" data-solution-id="{{cell.metadata.nbgrader.grade_id}}" data-points="{{ cell.metadata.nbgrader.points | float | round(2) }}">
         {{ resources.answers.get(cell.metadata.nbgrader.grade_id) | markdown2html | strip_files_prefix }}
       </div>
     </div>
