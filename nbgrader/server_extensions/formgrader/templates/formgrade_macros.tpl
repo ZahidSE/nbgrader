@@ -4,9 +4,11 @@
 
 <script src="{{ resources.base_url }}/formgrader/static/components/jquery/jquery.min.js"></script>
 <script src="{{ resources.base_url }}/formgrader/static/components/jquery-color/jquery.color.js"></script>
+<script src="{{ resources.base_url }}/formgrader/static/components/jquery.cookie/jquery.cookie.js"></script>
 <script src="{{ resources.base_url }}/formgrader/static/components/underscore/underscore-min.js"></script>
 <script src="{{ resources.base_url }}/formgrader/static/components/backbone/backbone-min.js"></script>
 <script src="{{ resources.base_url }}/formgrader/static/components/bootstrap/js/bootstrap.min.js"></script>
+<script src="{{ resources.base_url }}/formgrader/static/components/seiyria-bootstrap-slider/dist/bootstrap-slider.min.js"></script>
 <script type="text/javascript" src="{{ resources.base_url }}/formgrader/static/components/autosize/dist/autosize.min.js"></script>
 
 <script type="text/javascript">
@@ -36,6 +38,7 @@ function toggle_name(on) {
 </script>
 
 <link rel="stylesheet" href="{{ resources.base_url }}/formgrader/static/components/bootstrap/css/bootstrap.min.css" />
+<link rel="stylesheet" href="{{ resources.base_url }}/formgrader/static/components/seiyria-bootstrap-slider/dist/css/bootstrap-slider.min.css" />
 {% endmacro %}
 
 {% macro nav(resources) %}

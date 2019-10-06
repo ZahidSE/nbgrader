@@ -7,6 +7,7 @@ ShortAnswerGrader.prototype.init = function(){
 
     this.find_question_tupples();
     this.get_similarity_from_api();
+    this.creat_range_filter();
 
     
 
@@ -25,9 +26,9 @@ ShortAnswerGrader.prototype.init = function(){
 ShortAnswerGrader.prototype.find_question_tupples = function(){
     var self = this;
     $("div[data-solution-id]").each(function(index, element){
-        $ref_element = $(element);
-        $answer_element = $ref_element.parent().next().find(".panel-body .rendered_html");
-        $question_element =  $ref_element.parent().parent().parent().prev().find(".inner_cell .rendered_html");
+        var $ref_element = $(element);
+        var $answer_element = $ref_element.parent().next().find(".panel-body .rendered_html");
+        var $question_element =  $ref_element.parent().parent().parent().prev().find(".inner_cell .rendered_html");
 
         self.$question_tupples.push([$question_element, $answer_element, $ref_element]);
     });
@@ -80,6 +81,63 @@ ShortAnswerGrader.prototype.get_similarity_from_api = function(){
     });
 }
 
+ShortAnswerGrader.prototype.creat_range_filter = function() {
+    var self = this;
+
+    var $container = $("#notebook > .container");
+    var $sections = $container.children();
+    $range_section = $($sections[2].outerHTML);
+    $range_section.insertAfter($container.find("> div.cell").eq(2));
+
+    $clone_hr = $range_section.clone();
+    $range_section.find(".inner_cell .rendered_html").html(`
+        <div class="form-group">
+            <label class="filter-label" for="similarityFilter">Similarity Filter:</label>
+            <div class="filter-container">
+                <input type="range" class="form-control-range" id="similarityFilter"
+                    data-slider-min="1" data-slider-max="100" data-slider-step="1" data-slider-value="30"
+                    data-slider-handle="square">
+            </div>
+        </div>
+    `);
+
+    this.$filter = $range_section.find("#similarityFilter").slider({
+        formatter: function(value) {
+            return value + '%';
+        }
+    });
+
+    if($.cookie("similarity_filter")) {
+        this.$filter.slider("setValue", $.cookie("similarity_filter"));
+    }
+
+    // Adds delay for filtering for rapid change of filter value
+    var filter = function(){
+        self.filter_similarity();
+    }
+
+    var delayed_filter = _.debounce(filter, 1000);
+
+    this.$filter.on("change", function(slideEvt) {
+        $.cookie("similarity_filter", slideEvt.value.newValue,  { expires: 365 });
+        delayed_filter();
+    });
+
+    // $clone_hr.clone().insertAfter($container.find("> div.cell").eq(3));
+}
+
+ShortAnswerGrader.prototype.filter_similarity = function() {
+    var self = this;
+    
+    $("#notebook span.word[data-max-match]").each(function(index, element){
+        var $element = $(element);
+        var attribute_value = parseFloat($element.data("max-match"));
+
+        self.highlight_max_similar_phrase_item($element, attribute_value);
+    });
+}
+
+
 ShortAnswerGrader.prototype.fill_scores = function() {
     var self = this;
     $.each(this.$question_tupples, function(tupple_index, elements){
@@ -91,8 +149,13 @@ ShortAnswerGrader.prototype.fill_scores = function() {
         var full_score = parseFloat($ref_element.attr("data-points"));
         var $score_element = $answer_element.parent().prev().find("input.score");
         if($score_element.val() == "") {
-            $score_element.val((response.sim * full_score).toFixed(2))
+            $score_element.addClass("auto-graded");
+            $score_element.val(Math.round(response.sim * full_score));
             $score_element.trigger("change");
+
+            $score_element.change(function(){
+                $score_element.removeClass("auto-graded");
+            });
         }
     });
 }
@@ -158,11 +221,11 @@ ShortAnswerGrader.prototype.highlight_max_similar_phrase_pair = function() {
             if(matches_for_word.length > 0) {
                 var max_match_score = _.max(matches_for_word, function(m){return m.sim;});
 
-                $word.addClass("badge");
-                $word.css("background-color", self.get_similarity_color_code(max_match_score.sim));
+                $word.attr("data-max-match", max_match_score.sim);
+                self.highlight_max_similar_phrase_item($word, max_match_score.sim);
                 
                 match_tooltip_title = _.map(matches_for_word, function(m){
-                    return m.ref + "(" + m.sim.toFixed(2) + ")";
+                    return m.ref + "(" + Math.round(m.sim * 100) + "%)";
                 }).join(", ")
                 $word.attr("title", match_tooltip_title);
             }
@@ -172,8 +235,7 @@ ShortAnswerGrader.prototype.highlight_max_similar_phrase_pair = function() {
             $question_element.find("span.word").each(function(index, question_word){
                 var $question_word = $(question_word);
                 if($question_word.attr("data-lemma") == word_lemma){
-                    $word.addClass("badge question-demotion");
-                    $question_word.addClass("badge question-demotion");
+                    $word.addClass("question-demotion");
                 }
             });
         });
@@ -187,11 +249,11 @@ ShortAnswerGrader.prototype.highlight_max_similar_phrase_pair = function() {
             if(matches_for_word.length > 0) {
                 var max_match_score = _.max(matches_for_word, function(m){return m.sim;});
 
-                $word.addClass("badge");
-                $word.css("background-color", self.get_similarity_color_code(max_match_score.sim));
+                $word.attr("data-max-match", max_match_score.sim);
+                self.highlight_max_similar_phrase_item($word, max_match_score.sim);
                 
                 match_tooltip_title = _.map(matches_for_word, function(m){
-                    return m.answer + "(" + m.sim.toFixed(2) + ")";
+                    return m.answer + "(" + Math.round(m.sim * 100) + "%)";
                 }).join(", ")
                 $word.attr("title", match_tooltip_title);
             }
@@ -199,9 +261,22 @@ ShortAnswerGrader.prototype.highlight_max_similar_phrase_pair = function() {
     });
 }
 
+ShortAnswerGrader.prototype.highlight_max_similar_phrase_item = function($word, similarity) {
+    var filter_value = this.$filter.slider('getValue');
+
+    if( Math.round(similarity * 100) < filter_value) {
+        $word.removeClass("badge");
+        $word.css("background-color", "transparent");
+    } else{
+        $word.addClass("badge");
+        $word.css("background-color", this.get_similarity_color_code(similarity));
+    }
+}
+
 ShortAnswerGrader.prototype.get_similarity_color_code = function(sim) {
     // Should be darker for higher similarity. 0XFF(255) is lightest 0X55(85) is darkest
-    var green_value = (parseInt((1.0-sim) * 170) + 85).toString(16);
+    // var green_value = (parseInt((1.0-sim) * 170) + 85).toString(16);
+    var green_value = parseInt(sim * 210).toString(16);
     return "#00" + green_value + "00";
 }
 
