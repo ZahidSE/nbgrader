@@ -74,11 +74,16 @@ ShortAnswerGrader.prototype.get_similarity_from_api = function(){
             self.fill_scores();
             self.create_mock_elements();
             self.highlight_max_similar_phrase_pair();
+            self.enable_tooltip();
         },
         error: function( jqXhr, textStatus, errorThrown ){
             console.log( "An error occurred while getting similarity from API:" + errorThrown );
         }
     });
+}
+
+ShortAnswerGrader.prototype.enable_tooltip = function() {
+    $('[data-toggle="tooltip"]').tooltip();
 }
 
 ShortAnswerGrader.prototype.creat_range_filter = function() {
@@ -222,6 +227,10 @@ ShortAnswerGrader.prototype.highlight_max_similar_phrase_pair = function() {
                 var max_match_score = _.max(matches_for_word, function(m){return m.sim;});
 
                 $word.attr("data-max-match", max_match_score.sim);
+                
+                $word.attr("data-toggle", "tooltip");
+                $word.attr("data-placement", "top");
+
                 self.highlight_max_similar_phrase_item($word, max_match_score.sim);
                 
                 match_tooltip_title = _.map(matches_for_word, function(m){
@@ -250,6 +259,10 @@ ShortAnswerGrader.prototype.highlight_max_similar_phrase_pair = function() {
                 var max_match_score = _.max(matches_for_word, function(m){return m.sim;});
 
                 $word.attr("data-max-match", max_match_score.sim);
+
+                $word.attr("data-toggle", "tooltip");
+                $word.attr("data-placement", "top");
+
                 self.highlight_max_similar_phrase_item($word, max_match_score.sim);
                 
                 match_tooltip_title = _.map(matches_for_word, function(m){
