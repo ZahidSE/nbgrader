@@ -83,7 +83,7 @@ ShortAnswerGrader.prototype.get_similarity_from_api = function(){
 }
 
 ShortAnswerGrader.prototype.enable_tooltip = function() {
-    $('[data-toggle="tooltip"]').tooltip();
+    $('#notebook [data-toggle="tooltip"]').tooltip({html: true});
 }
 
 ShortAnswerGrader.prototype.creat_range_filter = function() {
@@ -97,7 +97,7 @@ ShortAnswerGrader.prototype.creat_range_filter = function() {
     $clone_hr = $range_section.clone();
     $range_section.find(".inner_cell .rendered_html").html(`
         <div class="form-group">
-            <label class="filter-label" for="similarityFilter">Similarity Filter:</label>
+            <label class="filter-label" for="similarityFilter" data-toggle="tooltip" title="Highlights similarities above the threshold only">Similarity Threshold:</label>
             <div class="filter-container">
                 <input type="range" class="form-control-range" id="similarityFilter"
                     data-slider-min="1" data-slider-max="100" data-slider-step="1" data-slider-value="30"
@@ -211,7 +211,7 @@ ShortAnswerGrader.prototype.create_mock_elements = function() {
 ShortAnswerGrader.prototype.highlight_max_similar_phrase_pair = function() {
     var self = this;
 
-    $.each(this.$mock_question_tupples, function(index, tupple){
+    $.each(this.$mock_question_tupples, function(index_tuple, tupple){
         [$question_element, $answer_element, $ref_element] = tupple;
 
         var response = self.hash[$ref_element.attr("data-solution-id")];
@@ -229,7 +229,6 @@ ShortAnswerGrader.prototype.highlight_max_similar_phrase_pair = function() {
                 $word.attr("data-max-match", max_match_score.sim);
                 
                 $word.attr("data-toggle", "tooltip");
-                $word.attr("data-placement", "top");
 
                 self.highlight_max_similar_phrase_item($word, max_match_score.sim);
                 
@@ -238,15 +237,6 @@ ShortAnswerGrader.prototype.highlight_max_similar_phrase_pair = function() {
                 }).join(", ")
                 $word.attr("title", match_tooltip_title);
             }
-
-            // Highlight question demotion
-            var word_lemma = $word.attr("data-lemma");
-            $question_element.find("span.word").each(function(index, question_word){
-                var $question_word = $(question_word);
-                if($question_word.attr("data-lemma") == word_lemma){
-                    $word.addClass("question-demotion");
-                }
-            });
         });
 
         // Highlight solution section
@@ -272,7 +262,40 @@ ShortAnswerGrader.prototype.highlight_max_similar_phrase_pair = function() {
             }
         });
     });
+
+    // Highlight demoted text
+    self.highlight_demoted_text();
 }
+
+ShortAnswerGrader.prototype.highlight_demoted_text = function() {
+    var self = this;
+
+    $.each(this.$mock_question_tupples, function(index_tupple, tupple){
+        [$question_element, $answer_element, $ref_element] = tupple;
+        var response = self.hash[$ref_element.attr("data-solution-id")];
+
+        $answer_element.find("span.word").each(function(index_word, word){
+            var $word = $(word);
+
+            $.each(response.answer, function(index_token, token) {
+                if($word.data("text") == token.text && token.current == "" && token.modifications.length > 0) {
+                    var path = token.modifications[0].before;
+                    
+                    for(var ind=0; ind < token.modifications.length; ind++) {
+                        path = path + " --> (" + token.modifications[ind].action + ") --> " + token.modifications[ind].after;
+                    }
+
+                    path+= "[EMPTY]";
+
+                    $word.attr("data-toggle", "tooltip");
+                    $word.attr("title", path);
+                    $word.addClass("text-demotion");
+                }
+            });
+        });
+    });
+}
+
 
 ShortAnswerGrader.prototype.highlight_max_similar_phrase_item = function($word, similarity) {
     var filter_value = this.$filter.slider('getValue');

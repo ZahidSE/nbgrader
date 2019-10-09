@@ -7,7 +7,7 @@ span.word {
   font-weight: bold;
 }
 
-.question-demotion {
+.text-demotion {
   text-decoration: line-through;
 }
 
@@ -16,6 +16,11 @@ input.score.auto-graded {
   border: 2px solid #ffc107;
   border-radius: 4px;
   background-color: #FFFFE0;
+}
+
+/* Styles for tooltip */
+.tooltip-inner {
+  max-width: 600px;
 }
 
 /* Styles for similarity filter control */
