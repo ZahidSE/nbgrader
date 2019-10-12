@@ -1,3 +1,7 @@
+span.word-container.focus{
+  background-color: #bce8f1;
+}
+
 span.word {
   margin-right: 5px;
   display: inline-block;

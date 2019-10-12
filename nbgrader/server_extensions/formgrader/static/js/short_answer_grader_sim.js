@@ -73,7 +73,8 @@ ShortAnswerGrader.prototype.get_similarity_from_api = function(){
             });
             self.fill_scores();
             self.create_mock_elements();
-            self.highlight_max_similar_phrase_pair();
+            self.highlight_answers();
+            self.highlight_demoted_text();
             self.enable_tooltip();
         },
         error: function( jqXhr, textStatus, errorThrown ){
@@ -166,6 +167,7 @@ ShortAnswerGrader.prototype.fill_scores = function() {
 }
 
 ShortAnswerGrader.prototype.create_mock_elements = function() {
+    var $question_element, $answer_element, $ref_element;
     var self = this;
     var mock_question_tupples = []
     $.each(this.$question_tupples, function(tupple_index, elements){
@@ -190,7 +192,7 @@ ShortAnswerGrader.prototype.create_mock_elements = function() {
             $mock_element.attr("data-text", _.map(tokens, function(t){return t.text}).join(" "));
 
             $.each(tokens, function(_, t){
-                $mock_element.append($('<span class="word" data-text="' + t.text + '" data-lemma="' + t.lemma + '">' + t.text.replace('_', ' ') + '</span>'));
+                $mock_element.append($('<span class="word-container"><span class="word" data-text="' + t.text + '" data-lemma="' + t.lemma + '">' + t.text.replace('_', ' ') + '</span></span>'));
             });
 
             mock_elements.push($mock_element);
@@ -262,9 +264,186 @@ ShortAnswerGrader.prototype.highlight_max_similar_phrase_pair = function() {
             }
         });
     });
+}
 
-    // Highlight demoted text
-    self.highlight_demoted_text();
+ShortAnswerGrader.prototype.highlight_answers = function() {
+    var $question_element, $answer_element, $ref_element;
+    var self = this;
+
+    $.each(this.$mock_question_tupples, function(index_tuple, tupple){
+        [$question_element, $answer_element, $ref_element] = tupple;
+
+        var response = self.hash[$ref_element.attr("data-solution-id")];
+        var match_hash = self.get_matches(response.match.items, "answer", "ref");
+
+        // Highlight answer section
+        $answer_element.find("span.word").each(function(index_word, word){
+            var $word = $(word);
+
+            // Highlight similarity with ref
+            if(match_hash[$word.data("text")]) {
+                matches_for_word = match_hash[$word.data("text")];
+                var max_match_score = _.max(matches_for_word, function(m){return m.sim;});
+
+                $word.attr("data-max-match", max_match_score.sim);
+                $word.attr("data-toggle", "tooltip");
+                $word.attr("data-index", index_word);
+
+                self.highlight_max_similar_phrase_item($word, max_match_score.sim);
+                
+                match_tooltip_title = _.map(matches_for_word, function(m){
+                    return m.text + "(" + Math.round(m.sim * 100) + "%)";
+                }).join(", ")
+                $word.attr("title", match_tooltip_title);
+
+                match_tooltip_title = _.map(matches_for_word, function(m){
+                    return m.text;
+                }).join(",")
+                $word.attr("data-matches", match_tooltip_title);
+            }
+        });
+
+        // self.find_answer_phrases(tupple, match_hash);
+    });
+}
+
+ShortAnswerGrader.prototype.find_answer_phrases = function(tupple, hash) {
+    var $question_element, $answer_element, $ref_element;
+    var self = this;
+
+    [$question_element, $answer_element, $ref_element] = tupple;
+
+    var response = self.hash[$ref_element.attr("data-solution-id")];
+
+    $answer_element.find("span.word.badge").each(function(index_word, word){
+        var $word = $(word);
+        var answer_phrases = [];
+
+        // Find phrases for each possible word match with the current word
+        if(hash[$word.data("text")]) {
+            $.each(hash[$word.data("text")], function(index_pair, pair){
+                $.each(response.match.items, function(index_item, item){
+                    var contains_pair = _.find(item.matches, {answer: $word.data("text"), ref: pair.text}).length > 0;
+                    if(contains_pair) {
+                        var mapped_phrase = _.map(response.match.answer_phrases[item.answer_index], function(index_m ,m){
+                            return {
+                                priority: m.priority,
+                                tokens: _.map(m.tokens, function(index_token, token){return token.original;})
+                            }
+                        });
+                        answer_phrases.push({
+                            phrase: mapped_phrase,
+                            ref: pair.text,
+                            sim: item.sim
+                        });
+                    }
+                });
+            });
+        }
+
+        // Filter answer phrases where current word fits
+        priority_one_phrases = _.filter(answer_phrases, function(item){
+            return item.phrase.priority == 1;
+        });
+
+        if(priority_one_phrases.length > 0) {
+            answer_phrases = priority_one_phrases;
+        }
+
+        max_matching_phrase = _.last(_.sortBy(answer_phrases, function(item){
+                return item.sim;
+            })
+        );
+    });
+}
+
+ShortAnswerGrader.prototype.fit_phase_with_answer = function(word_index, answer, phrase) {
+    var matches = this.find_matches(answer, phrase);
+    var matches_containing_word = _.filter(matches, function(m){
+        return word_index >= m.start && word_index <= m.end;
+    });
+
+    return matches_containing_word;
+}
+
+ShortAnswerGrader.prototype.find_matches = function(answer, phrase) {
+    var match, mis_match_count, end_index;
+    var self = this;
+    var matches = [];
+    for(var answer_index = 0; answer_index < answer.length; answer_index++) {
+        for(var phrase_index=answer_index; phrase_index < phrase.length; phrase_index++) {
+            if(answer[answer_index] == phrase[phrase_index]) {
+                [match, mis_match_count, end_index] = self.find_match(phrase_index, answer, phrase);
+                if(match) {
+                    matches.push({
+                        start: phrase_index,
+                        end: end_index,
+                        mis_match: mis_match_count
+                    });
+                }
+            }
+        }
+    }
+    return matches;
+}
+
+ShortAnswerGrader.prototype.find_match = function(start_index, answer, phrase) {
+    var mis_match = 0;
+    var end_index_answer = start_index;
+    var end_index_phrase = start_index;
+    while(end_index_answer < answer.length && end_index_phrase < phrase.length) {
+        if(answer[end_index_answer] == phrase[end_index_phrase]) {
+            if(end_index_phrase == phrase.length -1){
+                return [true, mis_match, end_index_answer];
+            } 
+            end_index_answer++;
+            end_index_phrase++;
+        } else {
+            mis_match++;
+            end_index_answer++;
+        }
+    }
+
+    return [false, -1, -1];
+}
+
+ShortAnswerGrader.prototype.get_matches = function(items, key, ref_key) {
+    var hash = {};
+
+    for(var index_item=0; index_item < items.length; index_item++) {
+        var item = items[index_item];
+
+        for(var index_match=0; index_match < item.matches.length; index_match++) {
+            var match = item.matches[index_match];
+
+            var key_text = match[key];
+            var ref_text = match[ref_key];
+
+            if(hash[key_text]){
+                var existing_match = _.first(_.where(hash[key_text], {text: ref_text}));
+                if(existing_match) {
+                    existing_match.sim.push(match.sim);
+                } else {
+                    hash[key_text].push({text: ref_text, sim: [match.sim]})
+                }
+            }else {
+                hash[key_text] = [{text: ref_text, sim: [match.sim]}];
+            }
+        }
+    }
+
+    var response = {};
+
+    for(var key in hash) {
+        var ref_matches = _.map(hash[key], function(item){
+            return {
+                text: item.text,
+                sim: (_.reduce(item.sim, function(memo, num){ return memo + num; }, 0)) / item.sim.length
+            }
+        });
+        response[key] = ref_matches;
+    }
+    return response;
 }
 
 ShortAnswerGrader.prototype.highlight_demoted_text = function() {
