@@ -73,7 +73,9 @@ ShortAnswerGrader.prototype.get_similarity_from_api = function(){
             });
             self.fill_scores();
             self.create_mock_elements();
+            self.highlight_refs();
             self.highlight_answers();
+            self.enable_phrase_highlight();
             self.highlight_demoted_text();
             self.enable_tooltip();
         },
@@ -210,59 +212,43 @@ ShortAnswerGrader.prototype.create_mock_elements = function() {
     self.$mock_question_tupples = mock_question_tupples;
 }
 
-ShortAnswerGrader.prototype.highlight_max_similar_phrase_pair = function() {
+ShortAnswerGrader.prototype.highlight_refs = function() {
+    var $question_element, $answer_element, $ref_element;
     var self = this;
 
     $.each(this.$mock_question_tupples, function(index_tuple, tupple){
         [$question_element, $answer_element, $ref_element] = tupple;
 
         var response = self.hash[$ref_element.attr("data-solution-id")];
-        var largest_phrase_match = _.max(response.matches, function(m) { return m.sim;});
+        var match_hash = self.get_matches(response.match.items, "ref", "answer");
 
-        // Highlight answer section
-        $answer_element.find("span.word").each(function(index, word){
+        // Highlight ref section
+        $ref_element.find("span.word").each(function(index_word, word){
             var $word = $(word);
 
-            // Highlight similarity with ref
-            var matches_for_word = _.filter(largest_phrase_match.matches, function(m){return m.answer == $word.data("text")});
-            if(matches_for_word.length > 0) {
+            // Highlight similarity with answer
+            if(match_hash[$word.data("text")]) {
+                matches_for_word = match_hash[$word.data("text")];
                 var max_match_score = _.max(matches_for_word, function(m){return m.sim;});
 
                 $word.attr("data-max-match", max_match_score.sim);
-                
                 $word.attr("data-toggle", "tooltip");
+                $word.attr("data-index", index_word);
 
                 self.highlight_max_similar_phrase_item($word, max_match_score.sim);
                 
                 match_tooltip_title = _.map(matches_for_word, function(m){
-                    return m.ref + "(" + Math.round(m.sim * 100) + "%)";
+                    return m.text + "(" + Math.round(m.sim * 100) + "%)";
                 }).join(", ")
                 $word.attr("title", match_tooltip_title);
+
+                matche_list = _.map(matches_for_word, function(m){
+                    return m.text;
+                }).join(",")
+                $word.attr("data-matches", matche_list);
             }
         });
 
-        // Highlight solution section
-        $ref_element.find("span.word").each(function(index, word){
-            var $word = $(word);
-
-            // Highlight similarity with ref
-            var matches_for_word = _.filter(largest_phrase_match.matches, function(m){return m.ref == $word.data("text")});
-            if(matches_for_word.length > 0) {
-                var max_match_score = _.max(matches_for_word, function(m){return m.sim;});
-
-                $word.attr("data-max-match", max_match_score.sim);
-
-                $word.attr("data-toggle", "tooltip");
-                $word.attr("data-placement", "top");
-
-                self.highlight_max_similar_phrase_item($word, max_match_score.sim);
-                
-                match_tooltip_title = _.map(matches_for_word, function(m){
-                    return m.answer + "(" + Math.round(m.sim * 100) + "%)";
-                }).join(", ")
-                $word.attr("title", match_tooltip_title);
-            }
-        });
     });
 }
 
@@ -296,14 +282,14 @@ ShortAnswerGrader.prototype.highlight_answers = function() {
                 }).join(", ")
                 $word.attr("title", match_tooltip_title);
 
-                match_tooltip_title = _.map(matches_for_word, function(m){
+                matche_list = _.map(matches_for_word, function(m){
                     return m.text;
                 }).join(",")
-                $word.attr("data-matches", match_tooltip_title);
+                $word.attr("data-matches", matche_list);
             }
         });
 
-        // self.find_answer_phrases(tupple, match_hash);
+        self.find_answer_phrases(tupple, match_hash);
     });
 }
 
@@ -323,16 +309,24 @@ ShortAnswerGrader.prototype.find_answer_phrases = function(tupple, hash) {
         if(hash[$word.data("text")]) {
             $.each(hash[$word.data("text")], function(index_pair, pair){
                 $.each(response.match.items, function(index_item, item){
-                    var contains_pair = _.find(item.matches, {answer: $word.data("text"), ref: pair.text}).length > 0;
+                    var contains_pair = _.where(item.matches, {answer: $word.data("text"), ref: pair.text}).length > 0;
                     if(contains_pair) {
-                        var mapped_phrase = _.map(response.match.answer_phrases[item.answer_index], function(index_m ,m){
-                            return {
-                                priority: m.priority,
-                                tokens: _.map(m.tokens, function(index_token, token){return token.original;})
-                            }
-                        });
+                        var mapped_answer_phrase = {
+                            priority: response.match.answer_phrases[item.answer_index].priority,
+                            tokens: _.map(response.match.answer_phrases[item.answer_index].tokens, function(token){
+                                return token.original;
+                            })
+                        };
+
+                        var mapped_ref_phrase = {
+                            priority: response.match.ref_phrases[item.ref_index].priority,
+                            tokens: _.map(response.match.ref_phrases[item.ref_index].tokens, function(token){
+                                return token.original;
+                            })
+                        };
                         answer_phrases.push({
-                            phrase: mapped_phrase,
+                            answer_phrase: mapped_answer_phrase,
+                            ref_phrase: mapped_ref_phrase,
                             ref: pair.text,
                             sim: item.sim
                         });
@@ -342,22 +336,65 @@ ShortAnswerGrader.prototype.find_answer_phrases = function(tupple, hash) {
         }
 
         // Filter answer phrases where current word fits
-        priority_one_phrases = _.filter(answer_phrases, function(item){
-            return item.phrase.priority == 1;
-        });
+        if(answer_phrases.length > 0) {
+            var word_index = $word.data("index");
+            var answer = _.map(response.answer, function(item){
+                return item.text;
+            });
 
-        if(priority_one_phrases.length > 0) {
-            answer_phrases = priority_one_phrases;
+            var ref = _.map(response.ref, function(item){
+                return item.text;
+            });
+    
+            var matching_answer_phrases = _.filter(answer_phrases, function(p){
+                return self.fit_phrase_with_answer(word_index, answer, p.answer_phrase.tokens).length > 0;
+            });
+    
+            var priority_one_phrases = _.filter(matching_answer_phrases, function(item){
+                return item.answer_phrase.priority == 1;
+            });
+    
+            if(priority_one_phrases.length > 0) {
+                answer_phrases = priority_one_phrases;
+            }
+
+            max_matching_phrase = _.last(_.sortBy(answer_phrases, function(item){
+                    return item.sim;
+                })
+            );
+
+            // Match answer phrases
+            var matches = self.fit_phrase_with_answer(word_index, answer, max_matching_phrase.answer_phrase.tokens);
+            var match = _.first(_.sortBy(matches, function(item){
+                return item.mis_match;
+            }));
+
+            $word.attr("data-answer-phrase-start", match.start);
+            $word.attr("data-answer-phrase-end", match.end);
+
+            // Match ref phrases
+            var matches = self.fit_phrase_with_ref(max_matching_phrase.ref, ref, max_matching_phrase.ref_phrase.tokens);
+            var match = _.first(_.sortBy(matches, function(item){
+                return item.mis_match;
+            }));
+
+            $word.attr("data-ref-phrase-start", match.start);
+            $word.attr("data-ref-phrase-end", match.end);
         }
-
-        max_matching_phrase = _.last(_.sortBy(answer_phrases, function(item){
-                return item.sim;
-            })
-        );
     });
 }
 
-ShortAnswerGrader.prototype.fit_phase_with_answer = function(word_index, answer, phrase) {
+ShortAnswerGrader.prototype.fit_phrase_with_ref = function(word, ref, phrase) {
+    var matches = this.find_matches(ref, phrase);
+    var matches_containing_word = _.filter(matches, function(m){
+        var slice = ref.slice(m.start, m.end+1);
+        return _.contains(slice, word);
+    });
+
+    return matches_containing_word;
+}
+
+ShortAnswerGrader.prototype.fit_phrase_with_answer = function(word_index, answer, phrase) {
     var matches = this.find_matches(answer, phrase);
     var matches_containing_word = _.filter(matches, function(m){
         return word_index >= m.start && word_index <= m.end;
@@ -370,13 +407,14 @@ ShortAnswerGrader.prototype.find_matches = function(answer, phrase) {
     var match, mis_match_count, end_index;
     var self = this;
     var matches = [];
-    for(var answer_index = 0; answer_index < answer.length; answer_index++) {
-        for(var phrase_index=answer_index; phrase_index < phrase.length; phrase_index++) {
-            if(answer[answer_index] == phrase[phrase_index]) {
-                [match, mis_match_count, end_index] = self.find_match(phrase_index, answer, phrase);
+
+    if(answer.length > 0 && phrase.length > 0) {
+        for(var answer_index = 0; answer_index < answer.length; answer_index++) {
+            if(answer[answer_index] == phrase[0]) {
+                [match, mis_match_count, end_index] = self.find_match(answer_index, answer, phrase);
                 if(match) {
                     matches.push({
-                        start: phrase_index,
+                        start: answer_index,
                         end: end_index,
                         mis_match: mis_match_count
                     });
@@ -387,10 +425,10 @@ ShortAnswerGrader.prototype.find_matches = function(answer, phrase) {
     return matches;
 }
 
-ShortAnswerGrader.prototype.find_match = function(start_index, answer, phrase) {
+ShortAnswerGrader.prototype.find_match = function(answer_index, answer, phrase) {
     var mis_match = 0;
-    var end_index_answer = start_index;
-    var end_index_phrase = start_index;
+    var end_index_answer = answer_index;
+    var end_index_phrase = 0;
     while(end_index_answer < answer.length && end_index_phrase < phrase.length) {
         if(answer[end_index_answer] == phrase[end_index_phrase]) {
             if(end_index_phrase == phrase.length -1){
@@ -446,7 +484,61 @@ ShortAnswerGrader.prototype.get_matches = function(items, key, ref_key) {
     return response;
 }
 
+ShortAnswerGrader.prototype.enable_phrase_highlight = function(){
+    var $question_element, $answer_element, $ref_element;
+    var self = this;
+
+    $.each(this.$mock_question_tupples, function(index_tupple, tupple){
+        [$question_element, $answer_element, $ref_element] = tupple;
+
+        $answer_element.find("span.word.badge").each(function(index_word, word){
+            var $word = $(word);
+
+            $word.mouseenter(function(event){
+                var $target_word = $(event.target);
+
+                // Highlight answer phrase
+                var answer_start = parseInt($target_word.data("answer-phrase-start"));
+                var answer_end = parseInt($target_word.data("answer-phrase-end"));
+
+                var $phrase_container = $target_word.parent().parent();
+                $.each($phrase_container.find("span.word-container"), function(index_container, container){
+                    var $container = $(container);
+                    if(index_container >= answer_start && index_container <= answer_end) {
+                        $container.addClass("focus");
+                    }
+                });
+
+                // Highlight ref phrase
+                var ref_start = parseInt($target_word.data("ref-phrase-start"));
+                var ref_end = parseInt($target_word.data("ref-phrase-end"));
+
+                var $phrase_container = $target_word.parent().parent().parent().parent().prev();
+                $.each($phrase_container.find("span.word-container"), function(index_container, container){
+                    var $container = $(container);
+                    if(index_container >= ref_start && index_container <= ref_end) {
+                        $container.addClass("focus");
+                    }
+                });
+            });
+
+            $word.mouseleave(function(event){
+                var $target_word = $(event.target);
+
+                // Remove focus from answer
+                var $phrase_container = $target_word.parent().parent();
+                $phrase_container.find("span.word-container").removeClass("focus");
+
+                // Remove focus from ref
+                var $phrase_container = $target_word.parent().parent().parent().parent().prev();
+                $phrase_container.find("span.word-container").removeClass("focus");
+            });
+        });
+    });
+}
+
 ShortAnswerGrader.prototype.highlight_demoted_text = function() {
+    var $question_element, $answer_element, $ref_element;
     var self = this;
 
     $.each(this.$mock_question_tupples, function(index_tupple, tupple){
