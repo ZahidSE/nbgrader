@@ -220,14 +220,14 @@ ShortAnswerGrader.prototype.highlight_refs = function() {
         [$question_element, $answer_element, $ref_element] = tupple;
 
         var response = self.hash[$ref_element.attr("data-solution-id")];
-        var match_hash = self.get_matches(response.match.items, "ref", "answer");
+        var match_hash = self.get_word_matches_hash(response.match.items, "ref", "answer");
 
         // Highlight ref section
         $ref_element.find("span.word").each(function(index_word, word){
             var $word = $(word);
 
             // Highlight similarity with answer
-            if(match_hash[$word.data("text")]) {
+            if(match_hash[$word.data("text")] && Array.isArray(match_hash[$word.data("text")])) {
                 matches_for_word = match_hash[$word.data("text")];
                 var max_match_score = _.max(matches_for_word, function(m){return m.sim;});
 
@@ -260,32 +260,55 @@ ShortAnswerGrader.prototype.highlight_answers = function() {
         [$question_element, $answer_element, $ref_element] = tupple;
 
         var response = self.hash[$ref_element.attr("data-solution-id")];
-        var match_hash = self.get_matches(response.match.items, "answer", "ref");
+        var match_hash = self.get_word_matches_hash(response.match.items, "answer", "ref");
 
         // Highlight answer section
         $answer_element.find("span.word").each(function(index_word, word){
             var $word = $(word);
 
+            // Check if any of the answer phrases contains this word
+            var answer = _.map(response.answer, function(item){
+                return item.text;
+            });
+            var belongs_to_a_phrase = _.some(response.match.items, function(item){
+                var matching_words = _.map(item.matches, function(m){
+                    return m.answer;
+                });
+
+                var match_contains_word = _.contains(matching_words, $word.data("text"));
+
+                if(match_contains_word) {
+                    var phrase = _.map(response.match.answer_phrases[item.answer_index].tokens, function(t){
+                        return t.original;
+                    });
+                    return self.fit_phrase_with_answer(index_word, answer, phrase).length > 0;
+                }
+
+                return false;
+            })
+
             // Highlight similarity with ref
-            if(match_hash[$word.data("text")]) {
-                matches_for_word = match_hash[$word.data("text")];
-                var max_match_score = _.max(matches_for_word, function(m){return m.sim;});
+            if(belongs_to_a_phrase){
+                if(match_hash[$word.data("text")] && Array.isArray(match_hash[$word.data("text")])) {
+                    matches_for_word = match_hash[$word.data("text")];
+                    var max_match_score = _.max(matches_for_word, function(m){return m.sim;});
 
-                $word.attr("data-max-match", max_match_score.sim);
-                $word.attr("data-toggle", "tooltip");
-                $word.attr("data-index", index_word);
+                    $word.attr("data-max-match", max_match_score.sim);
+                    $word.attr("data-toggle", "tooltip");
+                    $word.attr("data-index", index_word);
 
-                self.highlight_max_similar_phrase_item($word, max_match_score.sim);
-                
-                match_tooltip_title = _.map(matches_for_word, function(m){
-                    return m.text + "(" + Math.round(m.sim * 100) + "%)";
-                }).join(", ")
-                $word.attr("title", match_tooltip_title);
+                    self.highlight_max_similar_phrase_item($word, max_match_score.sim);
+                    
+                    match_tooltip_title = _.map(matches_for_word, function(m){
+                        return m.text + "(" + Math.round(m.sim * 100) + "%)";
+                    }).join(", ")
+                    $word.attr("title", match_tooltip_title);
 
-                matche_list = _.map(matches_for_word, function(m){
-                    return m.text;
-                }).join(",")
-                $word.attr("data-matches", matche_list);
+                    matche_list = _.map(matches_for_word, function(m){
+                        return m.text;
+                    }).join(",")
+                    $word.attr("data-matches", matche_list);
+                }
             }
         });
 
@@ -306,7 +329,7 @@ ShortAnswerGrader.prototype.find_answer_phrases = function(tupple, hash) {
         var answer_phrases = [];
 
         // Find phrases for each possible word match with the current word
-        if(hash[$word.data("text")]) {
+        if(hash[$word.data("text")] && Array.isArray(hash[$word.data("text")])) {
             $.each(hash[$word.data("text")], function(index_pair, pair){
                 $.each(response.match.items, function(index_item, item){
                     var contains_pair = _.where(item.matches, {answer: $word.data("text"), ref: pair.text}).length > 0;
@@ -445,7 +468,7 @@ ShortAnswerGrader.prototype.find_match = function(answer_index, answer, phrase) 
     return [false, -1, -1];
 }
 
-ShortAnswerGrader.prototype.get_matches = function(items, key, ref_key) {
+ShortAnswerGrader.prototype.get_word_matches_hash = function(items, key, ref_key) {
     var hash = {};
 
     for(var index_item=0; index_item < items.length; index_item++) {
@@ -457,7 +480,7 @@ ShortAnswerGrader.prototype.get_matches = function(items, key, ref_key) {
             var key_text = match[key];
             var ref_text = match[ref_key];
 
-            if(hash[key_text]){
+            if(hash[key_text] && Array.isArray(hash[key_text])){
                 var existing_match = _.first(_.where(hash[key_text], {text: ref_text}));
                 if(existing_match) {
                     existing_match.sim.push(match.sim);
