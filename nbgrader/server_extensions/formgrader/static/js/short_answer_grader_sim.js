@@ -7,20 +7,7 @@ ShortAnswerGrader.prototype.init = function(){
 
     this.find_question_tupples();
     this.get_similarity_from_api();
-    this.creat_range_filter();
-
-    
-
-    // $("div[data-solution-id]").each(function(index, element){
-    //     if(index ==0 ) {
-    //         $ref_element = $(element);
-    //         $answer_element = $ref_element.parent().next().find(".panel-body .rendered_html");
-    //         $question_element =  $ref_element.parent().parent().parent().prev().find(".inner_cell .rendered_html");
-
-    //         [$question_element, $answer_element, $ref_element] = self.create_mock_elements($question_element, $answer_element, $ref_element);
-    //         self.highlight_max_similar_phrase_pair($question_element, $answer_element, $ref_element);
-    //     }
-    // });
+    // this.creat_range_filter();
 }
 
 ShortAnswerGrader.prototype.find_question_tupples = function(){
@@ -73,15 +60,230 @@ ShortAnswerGrader.prototype.get_similarity_from_api = function(){
             });
             self.fill_scores();
             self.create_mock_elements();
-            self.highlight_refs();
-            self.highlight_answers();
-            self.enable_phrase_highlight();
-            self.highlight_demoted_text();
+            self.find_matching_phrases();
+            self.group_ref_chunks();
+            self.enable_chunk_highlight();
+            // self.highlight_refs();
+            // self.highlight_answers();
+            // self.enable_phrase_highlight();
+            // self.highlight_demoted_text();
             self.enable_tooltip();
         },
         error: function( jqXhr, textStatus, errorThrown ){
             console.log( "An error occurred while getting similarity from API:" + errorThrown );
         }
+    });
+}
+
+ShortAnswerGrader.prototype.find_matching_phrases = function() {
+    var $question_element, $answer_element, $ref_element;
+    var self = this;
+
+    $.each(this.$mock_question_tupples, function(index_tuple, tupple){
+        [$question_element, $answer_element, $ref_element] = tupple;
+
+        var response = self.hash[$ref_element.attr("data-solution-id")];
+
+        $ref_element.find("span.word").each(function(ref_word_index, word){
+            var $word = $(word);
+
+            // Find chunk that contains the word and does not contain any other chunk (To exclude sententences if they contain chunks)
+            var matching_items = _.filter(response.match.items, function(item){
+                ref_phrase = response.match.ref_phrases[item.ref_index];
+                
+                var phrase_contains_word = (ref_word_index >= ref_phrase.start_word_index && ref_word_index <= ref_phrase.end_word_index);
+
+                var phrase_contains_other_phrase = _.some(response.match.ref_phrases, function(phrase){
+                    if(phrase != ref_phrase) {
+                        return (phrase.start_word_index >= ref_phrase.start_word_index && phrase.end_word_index <= ref_phrase.end_word_index)
+                    }
+
+                    return false;
+                });
+
+                return phrase_contains_word && !phrase_contains_other_phrase;
+            });
+
+            // Add attribute to the word for later steps
+            if(matching_items.length > 0) {
+                var max_match = _.max(matching_items, function(item){
+                    return item.sim;
+                });
+
+                $word.attr("data-max-match", max_match.sim);
+                $word.attr("data-toggle", "tooltip");
+
+                var match_tooltip_title = _.map(response.match.answer_phrases[max_match.answer_index].tokens, function(t){
+                    return t.original;
+                }).join(" ")
+                $word.attr("title", match_tooltip_title + " (" + Math.round(max_match.sim * 100) + "%)");
+
+                $word.attr("data-ref-index", max_match.ref_index);
+                $word.attr("data-answer-index", max_match.answer_index);
+            }
+        });
+    });
+}
+
+ShortAnswerGrader.prototype.group_ref_chunks = function() {
+    var $question_element, $answer_element, $ref_element;
+    var self = this;
+
+    $.each(this.$mock_question_tupples, function(index_tuple, tupple){
+        [$question_element, $answer_element, $ref_element] = tupple;
+
+        var solution_id = $ref_element.attr("data-solution-id");
+        var response = self.hash[solution_id];
+
+        var ref_words = $ref_element.find("span.word");
+        var index = 0;
+
+        while(index < ref_words.length) {
+            var $word = $(ref_words[index]);
+
+            if($word.is("[data-ref-index]")) {
+                var next = index+1;
+                while(next < ref_words.length) {
+                    $next_word = $(ref_words[next])
+
+                    if($next_word.data("ref-index") == $word.data("ref-index")){
+                        var sim = parseFloat($next_word.data("max-match"));
+                        $next_word.css("background-color", self.get_similarity_color_code(sim));
+                        $next_word.addClass("phrase");
+                        next++;
+                    }else {
+                        break;
+                    }
+                }
+
+                var sim = parseFloat($word.data("max-match"));
+                $word.css("background-color", self.get_similarity_color_code(sim));
+                $word.addClass("phrase");
+                
+                $(ref_words[index]).addClass("first-phrase-word");
+                $(ref_words[next-1]).addClass("last-phrase-word");
+                
+                index = next;
+
+                self.group_answer_chunks(solution_id, $word.data("ref-index"), 
+                    $word.data("answer-index"), $word.data("max-match"));
+            }else{
+                index++;
+            }
+        }
+    });
+}
+
+ShortAnswerGrader.prototype.group_answer_chunks = function(solution_id, ref_index, answer_index, sim) {
+    var response = this.hash[solution_id];
+    var answer_phrase = response.match.answer_phrases[answer_index];
+
+    var self = this;
+
+    $.each(this.$mock_question_tupples, function(index_tuple, tupple){
+        [$question_element, $answer_element, $ref_element] = tupple;
+
+        if ($ref_element.attr("data-solution-id") == solution_id) {
+
+            var start_index = -1;
+            var end_index = -1;
+            var answer_words = $answer_element.find("span.word");
+            for(var index=0; index< answer_words.length; index++) {
+                var $word = $(answer_words[index]);
+
+                if($word.data("index") >= answer_phrase.start_word_index && $word.data("index") <= answer_phrase.end_word_index) {
+                    if(start_index < 0){
+                        start_index = $word.data("index");
+                    }
+                    end_index = $word.data("index");
+                }
+            }
+
+            for(var index=start_index; index<= end_index; index++) {
+                var $word = $(answer_words[index]);
+
+                if(index == start_index) {
+                    $word.addClass("first-phrase-word");
+                }
+
+                if(index == end_index) {
+                    $word.addClass("last-phrase-word");
+                }
+
+                $word.addClass("phrase");
+
+                $word.attr("data-toggle", "tooltip");
+                var tooltip_title = _.map(response.match.ref_phrases[ref_index].tokens, function(t){
+                    return t.original;
+                }).join(" ");
+                tooltip_title = tooltip_title + " (" + Math.round(sim * 100) + "%)";
+
+                if($word.attr("title")) {
+                    $word.attr("title", $word.attr("title") + ", " + tooltip_title);
+                }else {
+                    $word.attr("title", tooltip_title);
+                }
+
+                var max_sim = sim;
+                if($word.is("[data-max-match]")) {
+                    var current_max = parseFloat($word.attr("data-max-match"));
+
+                    if(sim < current_max) {
+                        max_sim = current_max;
+                    }
+                }
+                $word.attr("data-max-match", max_sim);
+
+                $word.css("background-color", self.get_similarity_color_code(max_sim));
+
+                $word.attr("data-answer-index", answer_index);
+
+                if($word.is("[data-ref-indices]")) {
+                    $word.attr("data-ref-indices", $word.attr("data-ref-indices") + "," + ref_index);
+                } else{
+                    $word.attr("data-ref-indices", ref_index);
+                }
+            }
+        }
+    });   
+}
+
+ShortAnswerGrader.prototype.enable_chunk_highlight = function() {
+    var $question_element, $answer_element, $ref_element;
+    var self = this;
+
+    $.each(this.$mock_question_tupples, function(index_tupple, tupple){
+        [$question_element, $answer_element, $ref_element] = tupple;
+
+        $answer_element.find("span.word.phrase").each(function(index_word, word){
+            var $word = $(word);
+
+            $word.mouseenter(function(event){
+                var $word = $(event.target);
+
+                var ref_indices = $word.attr("data-ref-indices").split(",");
+                _.each(ref_indices, function(ref_index){
+                    $paired_ref_element = $word.parent().parent().parent().parent().prev();
+                    $paired_ref_element.find("span.word").each(function(ind, ref_word){
+                        $ref_word = $(ref_word);
+                        if($ref_word.attr("data-ref-index") == ref_index) {
+                            $ref_word.addClass("focus");
+                        }
+                    });
+                });
+                
+            });
+
+            $word.mouseleave(function(event){
+                var $word = $(event.target);
+
+                $paired_ref_element = $word.parent().parent().parent().parent().prev();
+                $paired_ref_element.find("span.word.focus").each(function(ind, ref_word){
+                    $ref_word = $(ref_word);
+                    $ref_word.removeClass("focus");
+                });
+            });
+        });
     });
 }
 
@@ -193,8 +395,8 @@ ShortAnswerGrader.prototype.create_mock_elements = function() {
             $mock_element.empty();
             $mock_element.attr("data-text", _.map(tokens, function(t){return t.text}).join(" "));
 
-            $.each(tokens, function(_, t){
-                $mock_element.append($('<span class="word-container"><span class="word" data-text="' + t.text + '" data-lemma="' + t.lemma + '">' + t.text.replace('_', ' ') + '</span></span>'));
+            $.each(tokens, function(token_index, t){
+                $mock_element.append($('<span class="word-container"><span class="word" data-text="' + t.text + '" data-lemma="' + t.lemma + '" data-index="' + token_index + '">' + t.text.replace('_', ' ') + '</span></span>'));
             });
 
             mock_elements.push($mock_element);

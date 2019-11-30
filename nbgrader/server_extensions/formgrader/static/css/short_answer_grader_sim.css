@@ -1,11 +1,42 @@
-span.word-container.focus{
-  background-color: #7dd2e4;
-  padding-bottom: 3px;
+span.word {
+  padding-left: 3px;
+  padding-right: 3px;
+  margin: 2px 0px 2px 0px;
+  display: inline-block;
+  border: 2px solid transparent;
 }
 
-span.word {
-  margin-right: 5px;
-  display: inline-block;
+span.word-container{
+}
+
+span.word.first-phrase-word{
+  border-top-left-radius: 10px;
+  border-bottom-left-radius: 10px;
+}
+
+span.word.phrase {
+  font-weight: bold;
+  color: white;
+  line-height: 27px;
+}
+
+span.word.phrase.focus {
+  border-top: 2px dotted #022f52;
+  border-bottom: 2px dotted #022f52;
+  color: #dedede;
+}
+
+span.word.first-phrase-word.focus {
+  border-left: 2px dotted #022f52;
+}
+
+span.word.last-phrase-word.focus {
+  border-right: 2px dotted #022f52;
+}
+
+span.word.last-phrase-word{
+  border-top-right-radius: 10px;
+  border-bottom-right-radius: 10px;
 }
 
 .question-text {
