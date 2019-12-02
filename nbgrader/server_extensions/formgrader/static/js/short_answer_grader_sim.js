@@ -7,7 +7,7 @@ ShortAnswerGrader.prototype.init = function(){
 
     this.find_question_tupples();
     this.get_similarity_from_api();
-    // this.creat_range_filter();
+    this.creat_range_filter();
 }
 
 ShortAnswerGrader.prototype.find_question_tupples = function(){
@@ -66,7 +66,7 @@ ShortAnswerGrader.prototype.get_similarity_from_api = function(){
             // self.highlight_refs();
             // self.highlight_answers();
             // self.enable_phrase_highlight();
-            // self.highlight_demoted_text();
+            self.highlight_demoted_text();
             self.enable_tooltip();
         },
         error: function( jqXhr, textStatus, errorThrown ){
@@ -265,9 +265,17 @@ ShortAnswerGrader.prototype.enable_chunk_highlight = function() {
                 _.each(ref_indices, function(ref_index){
                     $paired_ref_element = $word.parent().parent().parent().parent().prev();
                     $paired_ref_element.find("span.word").each(function(ind, ref_word){
-                        $ref_word = $(ref_word);
+                        var $ref_word = $(ref_word);
+
                         if($ref_word.attr("data-ref-index") == ref_index) {
                             $ref_word.addClass("focus");
+                            
+                            $ref_word.stop().animate({backgroundColor: '#daffcc'}, 500);
+                            setTimeout(() => {
+                                $ref_word.stop().animate({
+                                    backgroundColor: self.get_similarity_color_code($ref_word.data("max-match"))
+                                }, 500);
+                            }, 500);
                         }
                     });
                 });
@@ -339,7 +347,7 @@ ShortAnswerGrader.prototype.creat_range_filter = function() {
 ShortAnswerGrader.prototype.filter_similarity = function() {
     var self = this;
     
-    $("#notebook span.word[data-max-match]").each(function(index, element){
+    $("#notebook span.word.phrase[data-max-match]").each(function(index, element){
         var $element = $(element);
         var attribute_value = parseFloat($element.data("max-match"));
 
@@ -797,10 +805,10 @@ ShortAnswerGrader.prototype.highlight_max_similar_phrase_item = function($word, 
     var filter_value = this.$filter.slider('getValue');
 
     if( Math.round(similarity * 100) < filter_value) {
-        $word.removeClass("badge");
+        $word.removeClass("phrase");
         $word.css("background-color", "transparent");
     } else{
-        $word.addClass("badge");
+        $word.addClass("phrase");
         $word.css("background-color", this.get_similarity_color_code(similarity));
     }
 }

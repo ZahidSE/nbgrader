@@ -23,14 +23,14 @@ span.word.phrase {
 span.word.phrase.focus {
   border-top: 2px dotted #022f52;
   border-bottom: 2px dotted #022f52;
-  color: #dedede;
+  /* color: #dedede; */
 }
 
-span.word.first-phrase-word.focus {
+span.word.phrase.first-phrase-word.focus {
   border-left: 2px dotted #022f52;
 }
 
-span.word.last-phrase-word.focus {
+span.word.phrase.last-phrase-word.focus {
   border-right: 2px dotted #022f52;
 }
 
