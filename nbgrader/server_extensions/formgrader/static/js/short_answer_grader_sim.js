@@ -7,6 +7,7 @@ ShortAnswerGrader.prototype.init = function(){
 
     this.find_question_tupples();
     this.get_similarity_from_api();
+
     this.creat_range_filter();
 }
 
@@ -63,11 +64,9 @@ ShortAnswerGrader.prototype.get_similarity_from_api = function(){
             self.find_matching_phrases();
             self.group_ref_chunks();
             self.enable_chunk_highlight();
-            // self.highlight_refs();
-            // self.highlight_answers();
-            // self.enable_phrase_highlight();
             self.highlight_demoted_text();
             self.enable_tooltip();
+            self.filter_similarity();
         },
         error: function( jqXhr, textStatus, errorThrown ){
             console.log( "An error occurred while getting similarity from API:" + errorThrown );
@@ -250,6 +249,7 @@ ShortAnswerGrader.prototype.group_answer_chunks = function(solution_id, ref_inde
 
 ShortAnswerGrader.prototype.enable_chunk_highlight = function() {
     var $question_element, $answer_element, $ref_element;
+    var filter_value = this.$filter.slider('getValue');
     var self = this;
 
     $.each(this.$mock_question_tupples, function(index_tupple, tupple){
@@ -267,15 +267,18 @@ ShortAnswerGrader.prototype.enable_chunk_highlight = function() {
                     $paired_ref_element.find("span.word").each(function(ind, ref_word){
                         var $ref_word = $(ref_word);
 
-                        if($ref_word.attr("data-ref-index") == ref_index) {
+                        if($ref_word.attr("data-ref-index") == ref_index && $ref_word.hasClass("phrase")) {
                             $ref_word.addClass("focus");
-                            
-                            $ref_word.stop().animate({backgroundColor: '#daffcc'}, 500);
-                            setTimeout(() => {
-                                $ref_word.stop().animate({
-                                    backgroundColor: self.get_similarity_color_code($ref_word.data("max-match"))
+                            var ref_max_value = $ref_word.data("max-match");
+
+                            if(Math.round(ref_max_value * 100) >= filter_value) {
+                                $ref_word.stop().animate({backgroundColor: '#daffcc'}, 500);
+                                setTimeout(() => {
+                                    $ref_word.stop().animate({
+                                        backgroundColor: self.get_similarity_color_code(ref_max_value)
+                                    }, 500);
                                 }, 500);
-                            }, 500);
+                            }
                         }
                     });
                 });
@@ -347,7 +350,7 @@ ShortAnswerGrader.prototype.creat_range_filter = function() {
 ShortAnswerGrader.prototype.filter_similarity = function() {
     var self = this;
     
-    $("#notebook span.word.phrase[data-max-match]").each(function(index, element){
+    $("#notebook span.word[data-max-match]").each(function(index, element){
         var $element = $(element);
         var attribute_value = parseFloat($element.data("max-match"));
 
@@ -420,60 +423,6 @@ ShortAnswerGrader.prototype.create_mock_elements = function() {
         mock_question_tupples.push(mock_elements)
     });
     self.$mock_question_tupples = mock_question_tupples;
-}
-
-
-ShortAnswerGrader.prototype.enable_phrase_highlight = function(){
-    var $question_element, $answer_element, $ref_element;
-    var self = this;
-
-    $.each(this.$mock_question_tupples, function(index_tupple, tupple){
-        [$question_element, $answer_element, $ref_element] = tupple;
-
-        $answer_element.find("span.word.badge").each(function(index_word, word){
-            var $word = $(word);
-
-            $word.mouseenter(function(event){
-                var $target_word = $(event.target);
-
-                // Highlight answer phrase
-                var answer_start = parseInt($target_word.data("answer-phrase-start"));
-                var answer_end = parseInt($target_word.data("answer-phrase-end"));
-
-                var $phrase_container = $target_word.parent().parent();
-                $.each($phrase_container.find("span.word-container"), function(index_container, container){
-                    var $container = $(container);
-                    if(index_container >= answer_start && index_container <= answer_end) {
-                        $container.addClass("focus");
-                    }
-                });
-
-                // Highlight ref phrase
-                var ref_start = parseInt($target_word.data("ref-phrase-start"));
-                var ref_end = parseInt($target_word.data("ref-phrase-end"));
-
-                var $phrase_container = $target_word.parent().parent().parent().parent().prev();
-                $.each($phrase_container.find("span.word-container"), function(index_container, container){
-                    var $container = $(container);
-                    if(index_container >= ref_start && index_container <= ref_end) {
-                        $container.addClass("focus");
-                    }
-                });
-            });
-
-            $word.mouseleave(function(event){
-                var $target_word = $(event.target);
-
-                // Remove focus from answer
-                var $phrase_container = $target_word.parent().parent();
-                $phrase_container.find("span.word-container").removeClass("focus");
-
-                // Remove focus from ref
-                var $phrase_container = $target_word.parent().parent().parent().parent().prev();
-                $phrase_container.find("span.word-container").removeClass("focus");
-            });
-        });
-    });
 }
 
 ShortAnswerGrader.prototype.highlight_demoted_text = function() {
