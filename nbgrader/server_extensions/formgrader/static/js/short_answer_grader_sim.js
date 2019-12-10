@@ -109,16 +109,26 @@ ShortAnswerGrader.prototype.find_matching_phrases = function() {
                     return item.sim;
                 });
 
-                $word.attr("data-max-match", max_match.sim);
-                $word.attr("data-toggle", "tooltip");
+                if(max_match.sim > 0) {
+                    var match_tag = max_match.tag;
+                    if(match_tag == "SPE"){
+                        match_tag = "GEN";
+                    }else if(match_tag == "GEN") {
+                        match_tag = "SPE";
+                    }
 
-                var match_tooltip_title = _.map(response.match.answer_phrases[max_match.answer_index].tokens, function(t){
-                    return t.original;
-                }).join(" ")
-                $word.attr("title", match_tooltip_title + " (" + Math.round(max_match.sim * 100) + "%)");
+                    $word.attr("data-max-match", max_match.sim);
+                    $word.attr("data-match-tag", max_match.tag);
+                    $word.attr("data-toggle", "tooltip");
 
-                $word.attr("data-ref-index", max_match.ref_index);
-                $word.attr("data-answer-index", max_match.answer_index);
+                    var match_tooltip_title = _.map(response.match.answer_phrases[max_match.answer_index].tokens, function(t){
+                        return t.original;
+                    }).join(" ")
+                    $word.attr("title", match_tooltip_title + " (" + match_tag + ", "  + Math.round(max_match.sim * 100) + "%)");
+
+                    $word.attr("data-ref-index", max_match.ref_index);
+                    $word.attr("data-answer-index", max_match.answer_index);
+                }
             }
         });
     });
@@ -165,7 +175,7 @@ ShortAnswerGrader.prototype.group_ref_chunks = function() {
                 index = next;
 
                 self.group_answer_chunks(solution_id, $word.data("ref-index"), 
-                    $word.data("answer-index"), $word.data("max-match"));
+                    $word.data("answer-index"), $word.data("max-match"), $word.data("match-tag"));
             }else{
                 index++;
             }
@@ -173,7 +183,7 @@ ShortAnswerGrader.prototype.group_ref_chunks = function() {
     });
 }
 
-ShortAnswerGrader.prototype.group_answer_chunks = function(solution_id, ref_index, answer_index, sim) {
+ShortAnswerGrader.prototype.group_answer_chunks = function(solution_id, ref_index, answer_index, sim, tag) {
     var response = this.hash[solution_id];
     var answer_phrase = response.match.answer_phrases[answer_index];
 
@@ -215,7 +225,7 @@ ShortAnswerGrader.prototype.group_answer_chunks = function(solution_id, ref_inde
                 var tooltip_title = _.map(response.match.ref_phrases[ref_index].tokens, function(t){
                     return t.original;
                 }).join(" ");
-                tooltip_title = tooltip_title + " (" + Math.round(sim * 100) + "%)";
+                tooltip_title = tooltip_title + " (" + tag + ", " + Math.round(sim * 100) + "%)";
 
                 if($word.attr("title")) {
                     $word.attr("title", $word.attr("title") + ", " + tooltip_title);
