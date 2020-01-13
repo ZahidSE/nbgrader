@@ -100,7 +100,7 @@ ShortAnswerGrader.prototype.find_matching_phrases = function() {
                     return false;
                 });
 
-                return phrase_contains_word && !phrase_contains_other_phrase;
+                return phrase_contains_word && !phrase_contains_other_phrase && (response.match.answer_phrases[item.answer_index].priority == 1);
             });
 
             // Add attribute to the word for later steps
