@@ -67,6 +67,7 @@ ShortAnswerGrader.prototype.get_similarity_from_api = function(){
             self.highlight_demoted_text();
             self.enable_tooltip();
             self.filter_similarity();
+            self.highligh_dissimilarities();
         },
         error: function( jqXhr, textStatus, errorThrown ){
             console.log( "An error occurred while getting similarity from API:" + errorThrown );
@@ -482,6 +483,102 @@ ShortAnswerGrader.prototype.get_similarity_color_code = function(sim) {
     // var green_value = (parseInt((1.0-sim) * 170) + 85).toString(16);
     var green_value = parseInt(sim * 210).toString(16);
     return "#00" + green_value + "00";
+}
+
+ShortAnswerGrader.prototype.highligh_dissimilarities = function() {
+    var $question_element, $answer_element, $ref_element;
+    var self = this;
+
+    $.each(this.$mock_question_tupples, function(index_tuple, tupple){
+        [$question_element, $answer_element, $ref_element] = tupple;
+
+        var solution_id = $ref_element.attr("data-solution-id");
+        var response = self.hash[solution_id];
+
+        var ref_words = $ref_element.find("span.word");
+
+        $.each(response.match.items, function(match_index, match_item){
+            var ref_chunk = response.match.ref_phrases[match_item.ref_index];
+
+            if(ref_chunk.priority == 1 && (match_item.sim < 0.1 || response.match.answer_phrases[match_item.answer_index].priority != 1)) {
+                var start_index = response.match.ref_phrases[match_item.ref_index].start_word_index;
+                var end_index = response.match.ref_phrases[match_item.ref_index].end_word_index;
+
+                for(index = start_index; index <= end_index; index++){
+                    if(index < ref_words.length) {
+                        var $ref_word = $(ref_words[index]);
+
+                        $ref_word.addClass('missing-phrase');
+
+                        if(index == start_index){
+                            $ref_word.addClass('first-missing-phrase-word');
+                        }
+
+                        if(index == end_index){
+                            $ref_word.addClass('last-missing-phrase-word');
+                        }
+                    }
+                }
+                self.set_dissimilarity_intensity($question_element, $answer_element, $ref_element, response, start_index, end_index);
+            }
+        });
+    });
+}
+
+ShortAnswerGrader.prototype.set_dissimilarity_intensity = function($question_element, $answer_element, $ref_element, response, ref_start_index, ref_end_index) {
+    var self = this;
+
+    var question = _.map($question_element.find("span.word"), function(word){
+        return $(word).text();
+    }).join(" ");
+
+    var ref_filtered = _.filter($ref_element.find("span.word"), function(word){
+        return $(word).data("index") < ref_start_index || $(word).data("index") > ref_end_index;
+    });
+    var ref = _.map(ref_filtered, function(word){
+        return $(word).text();
+    }).join(" ");
+
+    var answer = _.map($answer_element.find("span.word"), function(word){
+        return $(word).text();
+    }).join(" ");
+
+    data = {
+        task: {
+            cells: [{answer: answer}]
+        },
+        solution: {
+            cells: [{question: question, ref: ref}]
+        }
+    };
+
+    $.ajax({
+        url: self.api_url,
+        dataType: 'json',
+        type: 'post',
+        contentType: 'application/json',
+        data: JSON.stringify(data),
+        processData: false,
+        success: function( res, textStatus, jQxhr ){
+            var diff = res[0].sim - response.sim;
+
+            if(diff > 0){
+                var diff_color = (255-102) * diff;
+                var red_value = parseInt(102 + diff_color).toString(16);
+                var color = "#" + red_value + "0000";
+
+                $.each($ref_element.find("span.word"), function(ind, word){
+                    var $word = $(word);
+                    if($word.data("index") >= ref_start_index && $word.data("index") <= ref_end_index){
+                        $word.css("background-color", color);
+                    }
+                });
+            }
+        },
+        error: function( jqXhr, textStatus, errorThrown ){
+            console.log( "An error occurred while getting similarity changes from API:" + errorThrown );
+        }
+    });
 }
 
 $(window).load(function () {
