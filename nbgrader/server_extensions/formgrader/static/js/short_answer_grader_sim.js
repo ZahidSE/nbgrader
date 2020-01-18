@@ -335,6 +335,7 @@ ShortAnswerGrader.prototype.find_answer_phrases = function(tupple, hash) {
                     var contains_pair = _.where(item.matches, {answer: $word.data("text"), ref: pair.text}).length > 0;
                     if(contains_pair) {
                         var mapped_answer_phrase = {
+                            index: item.answer_index,
                             priority: response.match.answer_phrases[item.answer_index].priority,
                             tokens: _.map(response.match.answer_phrases[item.answer_index].tokens, function(token){
                                 return token.original;
@@ -342,6 +343,7 @@ ShortAnswerGrader.prototype.find_answer_phrases = function(tupple, hash) {
                         };
 
                         var mapped_ref_phrase = {
+                            index: item.ref_index,
                             priority: response.match.ref_phrases[item.ref_index].priority,
                             tokens: _.map(response.match.ref_phrases[item.ref_index].tokens, function(token){
                                 return token.original;
@@ -381,7 +383,15 @@ ShortAnswerGrader.prototype.find_answer_phrases = function(tupple, hash) {
                 answer_phrases = priority_one_phrases;
             }
 
-            max_matching_phrase = _.last(_.sortBy(answer_phrases, function(item){
+            var priority_one_ref_phrases = _.filter(matching_answer_phrases, function(item){
+                return item.ref_phrase.priority == 1;
+            });
+
+            if(priority_one_ref_phrases.length > 0) {
+                answer_phrases = priority_one_ref_phrases;
+            }
+
+            var max_matching_phrase = _.last(_.sortBy(answer_phrases, function(item){
                     return item.sim;
                 })
             );
@@ -394,6 +404,7 @@ ShortAnswerGrader.prototype.find_answer_phrases = function(tupple, hash) {
 
             $word.attr("data-answer-phrase-start", match.start);
             $word.attr("data-answer-phrase-end", match.end);
+            $word.attr("data-answer-phrase-tokens", max_matching_phrase.answer_phrase.tokens);
 
             // Match ref phrases
             var matches = self.fit_phrase_with_ref(max_matching_phrase.ref, ref, max_matching_phrase.ref_phrase.tokens);
@@ -403,6 +414,7 @@ ShortAnswerGrader.prototype.find_answer_phrases = function(tupple, hash) {
 
             $word.attr("data-ref-phrase-start", match.start);
             $word.attr("data-ref-phrase-end", match.end);
+            $word.attr("data-ref-phrase-tokens", max_matching_phrase.ref_phrase.tokens);
         }
     });
 }
@@ -523,24 +535,37 @@ ShortAnswerGrader.prototype.enable_phrase_highlight = function(){
                 // Highlight answer phrase
                 var answer_start = parseInt($target_word.data("answer-phrase-start"));
                 var answer_end = parseInt($target_word.data("answer-phrase-end"));
+                var answer_tokens = $target_word.data("answer-phrase-tokens").split(",");
+                var answer_token_index = 0;
 
                 var $phrase_container = $target_word.parent().parent();
                 $.each($phrase_container.find("span.word-container"), function(index_container, container){
                     var $container = $(container);
-                    if(index_container >= answer_start && index_container <= answer_end) {
+                    var word_text = $container.find(".word").text();
+
+                    if(index_container >= answer_start && index_container <= answer_end && 
+                            answer_token_index < answer_tokens.length && answer_tokens[answer_token_index] == word_text) {
+                        
                         $container.addClass("focus");
+                        answer_token_index++;
                     }
                 });
 
                 // Highlight ref phrase
                 var ref_start = parseInt($target_word.data("ref-phrase-start"));
                 var ref_end = parseInt($target_word.data("ref-phrase-end"));
+                var ref_tokens = $target_word.data("ref-phrase-tokens").split(",");
+                var ref_token_index = 0;
 
                 var $phrase_container = $target_word.parent().parent().parent().parent().prev();
                 $.each($phrase_container.find("span.word-container"), function(index_container, container){
                     var $container = $(container);
-                    if(index_container >= ref_start && index_container <= ref_end) {
+                    var word_text = $container.find(".word").text();
+                    if(index_container >= ref_start && index_container <= ref_end && 
+                        ref_token_index < ref_tokens.length && ref_tokens[ref_token_index] == word_text) {
+                        
                         $container.addClass("focus");
+                        ref_token_index++;
                     }
                 });
             });
