@@ -226,7 +226,8 @@ ShortAnswerGrader.prototype.group_answer_chunks = function(solution_id, ref_inde
                 var tooltip_title = _.map(response.match.ref_phrases[ref_index].tokens, function(t){
                     return t.original;
                 }).join(" ");
-                tooltip_title = tooltip_title + " (" + tag + ", " + Math.round(sim * 100) + "%)";
+                // tooltip_title = tooltip_title + " (" + tag + ", " + Math.round(sim * 100) + "%)";
+                tooltip_title = tooltip_title + " (" + Math.round(sim * 100) + "%)";
 
                 if($word.attr("title")) {
                     $word.attr("title", $word.attr("title") + ", " + tooltip_title);
